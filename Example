@@ -1,0 +1,111 @@
+-- Variables
+local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+local aimActive = false
+local lastTarget = nil
+local smoothingFactor = 0.1 -- Adjustable smoothing factor
+local targetList = {}
+local targetIndex = 1
+local cameraLockCooldown = false
+
+-- Create a Screen GUI
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+local toggleButton = Instance.new("TextButton", screenGui)
+
+-- Configure the button
+toggleButton.Size = UDim2.new(0, 100, 0, 50) -- Width, Height
+toggleButton.Position = UDim2.new(1, -110, 0, 10) -- Top right corner
+toggleButton.Text = "Toggle Aim"
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green background
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White text
+toggleButton.Font = Enum.Font.SourceSans
+toggleButton.TextScaled = true
+
+-- Function to find the nearest player
+local function findNearestPlayer()
+    local nearestPlayer = nil
+    local shortestDistance = math.huge
+
+    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (otherPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                nearestPlayer = otherPlayer
+            end
+        end
+    end
+
+    return nearestPlayer
+end
+
+-- Highlight the target player
+local function highlightTarget(target)
+    if target and target.Character then
+        local highlight = Instance.new("Highlight")
+        highlight.Parent = target.Character
+        highlight.FillColor = Color3.fromRGB(255, 0, 0) -- Red for targeting
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- White outline
+        highlight.Adornee = target.Character
+        wait(1) -- Duration of highlight
+        highlight:Destroy()
+    end
+end
+
+-- Lock the camera onto the target
+local function cameraLock()
+    local target = findNearestPlayer()
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        highlightTarget(target) -- Highlight the target
+        local targetPosition = target.Character.HumanoidRootPart.Position
+        local desiredCFrame = CFrame.new(camera.CFrame.Position, targetPosition)
+        camera.CFrame = camera.CFrame:Lerp(desiredCFrame, smoothingFactor)
+        lastTarget = target
+    end
+end
+
+-- Toggle camera lock
+local function toggleCameraLock()
+    if cameraLockCooldown then return end
+    cameraLockCooldown = true
+    aimActive = not aimActive
+
+    if aimActive then
+        print("Camera Lock: ON")
+        while aimActive do
+            cameraLock()
+            wait(0.1)
+        end
+    else
+        print("Camera Lock: OFF")
+    end
+
+    wait(1) -- Cooldown duration
+    cameraLockCooldown = false
+end
+
+-- Connect the button to the toggle function
+toggleButton.MouseButton1Click:Connect(toggleCameraLock)
+
+-- Key binding for PC users
+mouse.KeyDown:Connect(function(key)
+    if key:lower() == "c" then
+        toggleCameraLock()
+    elseif key:lower() == "q" then
+        switchTarget(-1) -- Previous target
+    elseif key:lower() == "e" then
+        switchTarget(1) -- Next target
+    end
+end)
+
+-- Handle character falling state
+local RunService = game:GetService("RunService")
+RunService.RenderStepped:Connect(function()
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        local humanoid = player.Character.Humanoid
+        if humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
